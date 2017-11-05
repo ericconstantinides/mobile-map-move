@@ -1,0 +1,60 @@
+html,
+body {
+  height: 100%;
+  width: 100%;
+  overflow: auto; }
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: sans-serif; }
+
+*, *:before, *:after {
+  box-sizing: border-box; }
+
+.container {
+  position: relative;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden; }
+
+.google-map {
+  width: 100%;
+  height: calc(100vh - 200px); }
+  .google-map iframe {
+    width: 100%;
+    height: 100%; }
+
+.venueList {
+  padding: 0.5em;
+  background: #666;
+  position: absolute;
+  top: 100vh;
+  width: 100vw;
+  transform: translateY(-200px);
+  overflow: scroll;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 81px; }
+
+.venueList__item {
+  display: flex;
+  font-size: 0.9em;
+  margin-bottom: 0.5em;
+  background: white; }
+  .venueList__item:last-child {
+    margin-bottom: 0; }
+
+.venueList__item-title {
+  margin: 0 0 0.5em;
+  font-size: 1.25em; }
+
+.venueList__item-image {
+  width: 150px;
+  height: 100px;
+  object-fit: cover; }
+
+.venueList__item-content {
+  padding: 0.5em; }
+
+.venueList__item-p {
+  margin-bottom: 0; }
