@@ -1,25 +1,25 @@
 import React, { Component } from 'react'
 import ReactDOM from 'react-dom'
 import VenueListItem from './VenueListItem'
-import GoogleMap from './GoogleMap'
 
 const LOWEST_Y = 200
-const DRAG_INTERVAL = 25 // how often it's rechecking the drag position
+const DRAG_TIMEFRAME = 25 // how often it's rechecking the drag position
 const TIME_CONSTANT = 325 // how often it's autoscrolling
 const INERTIA_SPEED = 0.55 // how fast (or slow) to have the scrolling
+const MOMENTUM_SPEED = 0.8 // how far to go after letting go of the drag
 
 class App extends Component {
   constructor (props) {
     super(props)
     this.state = {
       dragItemPressed: false,
-      dragItemOffset: 0,
-      coItemOffset: 0,
-      dragItemStartY: 0,
+      dragItemPositionY: 0,
+      coItemPositionY: 0,
+      cursorPositionY: 0,
       // new for inertia:
       timestamp: '',
       ticker: 0,
-      frame: 0,
+      frame: 0, // how many pixels were dragged during the timeframe
       velocity: 0, // how fast the last frame was dragged through
       momentumDistance: 0,  // how many pixels to travel based on velocity
       momentumTargetY: 0    // the y pos that momentum will take the dragItem
@@ -30,17 +30,16 @@ class App extends Component {
       // this is extremely important for iOS:
       e.preventDefault()
     }
-    clearInterval(this.state.ticker)
-    const timestamp = Date.now()
-    const dragItemOffset = this.getYPosition(this.refs.dragItem)
-    const coItemOffset = this.getYPosition(this.refs.coItem)
-    const ticker = setInterval(this.trackDragging, DRAG_INTERVAL)
+    const dragItemPositionY = this.getYPosition(this.refs.dragItem)
+    const coItemPositionY = this.getYPosition(this.refs.coItem)
+    // start trackDragging every DRAG_TIMEFRAME ms:
+    const ticker = setInterval(this.trackDragging, DRAG_TIMEFRAME)
     this.setState({
       dragItemPressed: true,
-      dragItemOffset,
-      coItemOffset,
-      dragItemStartY: e.targetTouches ? e.targetTouches[0].pageY : e.pageY,
-      timestamp,
+      dragItemPositionY,
+      coItemPositionY,
+      cursorPositionY: e.targetTouches ? e.targetTouches[0].pageY : e.pageY,
+      timestamp: Date.now(),
       ticker,
       frame: 0,
       velocity: 0,
@@ -52,7 +51,7 @@ class App extends Component {
 
     clearInterval(this.state.ticker)
     if (this.state.velocity > 10 || this.state.velocity < -10) {
-      const momentumDistance = 0.8 * this.state.velocity
+      const momentumDistance = MOMENTUM_SPEED * this.state.velocity
       const momentumTargetY = Math.round(
         this.getYPosition(this.refs.dragItem) + momentumDistance
       )
@@ -70,10 +69,9 @@ class App extends Component {
   // this is where we actually move the items
   handleDragging = e => {
     if (!this.state.dragItemPressed) return
-    // fix for touche devices:
     const pageY = e.targetTouches ? e.targetTouches[0].pageY : e.pageY
-    const dragDistance = pageY - this.state.dragItemStartY
-    const dragItemGoToY = dragDistance + this.state.dragItemOffset
+    const dragDistance = pageY - this.state.cursorPositionY
+    const dragItemGoToY = dragDistance + this.state.dragItemPositionY
     this.moveItems(dragItemGoToY)
   }
   moveItems = goToYUnbounded => {
@@ -82,9 +80,9 @@ class App extends Component {
     const goToY = goToYUnbounded <= -dragItemHeight
       ? -dragItemHeight
       : goToYUnbounded >= -LOWEST_Y ? -LOWEST_Y : goToYUnbounded
-    const dragDistance = goToY - this.state.dragItemOffset
-    const coItemGoToY = dragDistance / 2 + this.state.coItemOffset < 0
-      ? dragDistance / 2 + this.state.coItemOffset
+    const dragDistance = goToY - this.state.dragItemPositionY
+    const coItemGoToY = dragDistance / 2 + this.state.coItemPositionY < 0
+      ? dragDistance / 2 + this.state.coItemPositionY
       : 0
     this.refs.coItem.style.transform = 'translateY(' + coItemGoToY + 'px)'
     this.refs.dragItem.style.transform = 'translateY(' + goToY + 'px)'
@@ -97,7 +95,7 @@ class App extends Component {
         .join('')
         .split(')')
         .join('')
-    )
+    ,10)
     if (translateY) return translateY
     return 0
   }
@@ -139,6 +137,7 @@ class App extends Component {
         <div className='google-map' ref='coItem'>
           <iframe
             src='https://www.google.com/maps/embed?pb=!1m10!1m8!1m3!1d12704.575550670781!2d-121.80501235000003!3d37.24429345000001!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sen!2sus!4v1509685457561'
+            title='Google Map'
             frameBorder='0'
             style={{ border: 0 }}
           />
