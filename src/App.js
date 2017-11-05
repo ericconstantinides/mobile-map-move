@@ -4,119 +4,109 @@ import VenueListItem from './VenueListItem'
 import GoogleMap from './GoogleMap'
 
 const LOWEST_Y = 200
-const DRAG_INTERVAL = 25  // how often it's checking the drag position
+const DRAG_INTERVAL = 25 // how often it's rechecking the drag position
 const TIME_CONSTANT = 325 // how often it's autoscrolling
-const INERTIA_SPEED = 0.5 // how fast (or slow) to have the scrolling
+const INERTIA_SPEED = 0.55 // how fast (or slow) to have the scrolling
 
 class App extends Component {
   constructor (props) {
     super(props)
     this.state = {
-      isDown: false,
-      venueListOffset: 0,
-      gglMapOffset: 0,
-      startY: 0,
+      dragItemPressed: false,
+      dragItemOffset: 0,
+      coItemOffset: 0,
+      dragItemStartY: 0,
       // new for inertia:
       timestamp: '',
       ticker: 0,
       frame: 0,
-      velocity: 0,
-      amplitude: 0,
-      target: 0
+      velocity: 0, // how fast the last frame was dragged through
+      momentumDistance: 0,  // how many pixels to travel based on velocity
+      momentumTargetY: 0    // the y pos that momentum will take the dragItem
     }
   }
   handleDragStart = e => {
-    // if (e.targetTouches) {
-    //   e.preventDefault()
-    // }
+    if (e.targetTouches) {
+      // this is extremely important for iOS:
+      e.preventDefault()
+    }
     clearInterval(this.state.ticker)
     const timestamp = Date.now()
-    const venueListOffset = this.getTranslateY(this.refs.venueList)
-    const gglMapOffset = this.getTranslateY(this.refs.gglMap)
-    const ticker = setInterval(this.trackDrag, DRAG_INTERVAL)
-    const frame = this.state.venueListOffset
+    const dragItemOffset = this.getYPosition(this.refs.dragItem)
+    const coItemOffset = this.getYPosition(this.refs.coItem)
+    const ticker = setInterval(this.trackDragging, DRAG_INTERVAL)
     this.setState({
-      isDown: true,
-      venueListOffset,
-      gglMapOffset,
-      startY: e.targetTouches ? e.targetTouches[0].pageY : e.pageY,
+      dragItemPressed: true,
+      dragItemOffset,
+      coItemOffset,
+      dragItemStartY: e.targetTouches ? e.targetTouches[0].pageY : e.pageY,
       timestamp,
       ticker,
-      frame,
+      frame: 0,
       velocity: 0,
-      amplitude: 0
+      momentumDistance: 0
     })
   }
   handleDragEnd = e => {
-    this.setState({ isDown: false })
+    this.setState({ dragItemPressed: false })
 
     clearInterval(this.state.ticker)
     if (this.state.velocity > 10 || this.state.velocity < -10) {
-      const amplitude = 0.8 * this.state.velocity
-      const target =
-        Math.round(this.getTranslateY(this.refs.venueList) + amplitude)
+      const momentumDistance = 0.8 * this.state.velocity
+      const momentumTargetY = Math.round(
+        this.getYPosition(this.refs.dragItem) + momentumDistance
+      )
       const timestamp = Date.now()
-      window.requestAnimationFrame(this.autoScroll)
+      window.requestAnimationFrame(this.calculateMomentum)
       this.setState((state, props) => {
         return {
-          target,
           timestamp,
-          amplitude
+          momentumTargetY,
+          momentumDistance
         }
       })
-      
     }
   }
   // this is where we actually move the items
-  handleDragMove = e => {
-    if (!this.state.isDown) return
+  handleDragging = e => {
+    if (!this.state.dragItemPressed) return
     // fix for touche devices:
-    const y = e.targetTouches ? e.targetTouches[0].pageY : e.pageY
-    const dragDistance = y - this.state.startY
-    const venueListGoToY = dragDistance + this.state.venueListOffset
-    const gglWalk = dragDistance / 2 + this.state.gglMapOffset < 0
-      ? dragDistance / 2 + this.state.gglMapOffset
-      : 0
+    const pageY = e.targetTouches ? e.targetTouches[0].pageY : e.pageY
+    const dragDistance = pageY - this.state.dragItemStartY
+    const dragItemGoToY = dragDistance + this.state.dragItemOffset
+    this.moveItems(dragItemGoToY)
+  }
+  moveItems = goToYUnbounded => {
+    const dragItemHeight = this.refs.dragItem.offsetHeight
     // make sure we're within our scrolling bounds:
-    this.scrollMove(venueListGoToY)
-    // e.stopPropagation()
-    // this is extremely important:
-    e.preventDefault()
+    const goToY = goToYUnbounded <= -dragItemHeight
+      ? -dragItemHeight
+      : goToYUnbounded >= -LOWEST_Y ? -LOWEST_Y : goToYUnbounded
+    const dragDistance = goToY - this.state.dragItemOffset
+    const coItemGoToY = dragDistance / 2 + this.state.coItemOffset < 0
+      ? dragDistance / 2 + this.state.coItemOffset
+      : 0
+    this.refs.coItem.style.transform = 'translateY(' + coItemGoToY + 'px)'
+    this.refs.dragItem.style.transform = 'translateY(' + goToY + 'px)'
   }
-  scrollMove = goToY => {
-    const venueListHeight = this.refs.venueList.offsetHeight
-    // console.log({goToY, venueListHeight})
-    const transY = goToY <= -venueListHeight
-    ? -venueListHeight
-    : goToY >= -LOWEST_Y
-    ? -LOWEST_Y
-    : goToY
-    const dragDistance = transY - this.state.venueListOffset
-    const gglTransY = dragDistance / 2 + this.state.gglMapOffset < 0
-    ? dragDistance / 2 + this.state.gglMapOffset
-    : 0
-    // e.preventDefault()
-    this.refs.gglMap.style.transform = 'translateY(' + gglTransY + 'px)'
-    this.refs.venueList.style.transform = 'translateY(' + transY + 'px)'
-  }
-  getTranslateY = myRef => {
+  getYPosition = myRef => {
     const translateY = parseInt(
       window
         .getComputedStyle(ReactDOM.findDOMNode(myRef))
         .transform.split('matrix(1, 0, 0, 1, 0, ')
         .join('')
         .split(')')
-        .join(''),
+        .join('')
     )
     if (translateY) return translateY
     return 0
   }
 
   // tracks the dragging for enabling inertia
-  trackDrag = () => {
+  trackDragging = () => {
     const now = Date.now()
     const elapsed = now - this.state.timestamp
-    const frame = this.getTranslateY(this.refs.venueList)
+    const frame = this.getYPosition(this.refs.dragItem)
     const delta = frame - this.state.frame
     const v = 1000 * delta / (1 + elapsed)
     const velocity = INERTIA_SPEED * v + 0.2 * this.state.velocity
@@ -130,17 +120,15 @@ class App extends Component {
   }
 
   // activates after letting go of list and still in movment
-  autoScroll = () => {
-    // console.log({'this.state.amplitude': this.state.amplitude})
-    if (this.state.amplitude) {
+  calculateMomentum = () => {
+    if (this.state.momentumDistance) {
       const elapsed = Date.now() - this.state.timestamp
-      const delta = -this.state.amplitude * Math.exp(-elapsed / TIME_CONSTANT)
-      // console.log('target + delta:', (this.state.target + delta))
+      const delta = -this.state.momentumDistance * Math.exp(-elapsed / TIME_CONSTANT)
       if (delta > 0.5 || delta < -0.5) {
-        this.scrollMove(this.state.target + delta)
-        window.requestAnimationFrame(this.autoScroll)
+        this.moveItems(this.state.momentumTargetY + delta)
+        window.requestAnimationFrame(this.calculateMomentum)
       } else {
-        this.scrollMove(this.state.target)
+        this.moveItems(this.state.momentumTargetY)
       }
     }
   }
@@ -148,7 +136,7 @@ class App extends Component {
   render () {
     return (
       <div className='container'>
-        <div className='google-map' ref='gglMap'>
+        <div className='google-map' ref='coItem'>
           <iframe
             src='https://www.google.com/maps/embed?pb=!1m10!1m8!1m3!1d12704.575550670781!2d-121.80501235000003!3d37.24429345000001!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sen!2sus!4v1509685457561'
             frameBorder='0'
@@ -157,14 +145,14 @@ class App extends Component {
         </div>
         <div
           className='venueList'
-          ref='venueList'
+          ref='dragItem'
           onMouseDown={this.handleDragStart}
           onTouchStart={this.handleDragStart}
           onTouchEnd={this.handleDragEnd}
           onMouseLeave={this.handleDragEnd}
           onMouseUp={this.handleDragEnd}
-          onTouchMove={this.handleDragMove}
-          onMouseMove={this.handleDragMove}
+          onTouchMove={this.handleDragging}
+          onMouseMove={this.handleDragging}
         >
           <VenueListItem number={1} />
           <VenueListItem number={2} />
