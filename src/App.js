@@ -27,7 +27,7 @@ class App extends Component {
   }
   handleDragStart = e => {
     if (e.targetTouches) {
-      // this is extremely important for iOS:
+      // this is extremely important for iOS (but gives a warnign in chrome):
       e.preventDefault()
     }
     const dragItemPositionY = this.getYPosition(this.refs.dragItem)
