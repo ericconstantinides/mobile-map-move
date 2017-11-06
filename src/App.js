@@ -5,8 +5,8 @@ import VenueListItem from './VenueListItem'
 const LOWEST_Y = 200
 const DRAG_TIMEFRAME = 25 // how often it's rechecking the drag position
 const TIME_CONSTANT = 325 // how often it's autoscrolling
-const INERTIA_SPEED = 0.55 // how fast (or slow) to have the scrolling
-const MOMENTUM_SPEED = 0.8 // how far to go after letting go of the drag
+const MOMENTUM_SPEED = 0.55 // how fast (or slow) to have the momentum
+const MOMENTUM_FRICTION = 0.8 // how loose or tight the momentum should be
 
 class App extends Component {
   constructor (props) {
@@ -51,7 +51,7 @@ class App extends Component {
 
     clearInterval(this.state.ticker)
     if (this.state.velocity > 10 || this.state.velocity < -10) {
-      const momentumDistance = MOMENTUM_SPEED * this.state.velocity
+      const momentumDistance = MOMENTUM_FRICTION * this.state.velocity
       const momentumTargetY = Math.round(
         this.getYPosition(this.refs.dragItem) + momentumDistance
       )
@@ -107,7 +107,7 @@ class App extends Component {
     const frame = this.getYPosition(this.refs.dragItem)
     const delta = frame - this.state.frame
     const v = 1000 * delta / (1 + elapsed)
-    const velocity = INERTIA_SPEED * v + 0.2 * this.state.velocity
+    const velocity = MOMENTUM_SPEED * v + 0.2 * this.state.velocity
     this.setState((state, props) => {
       return {
         timestamp: now,
