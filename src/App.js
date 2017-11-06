@@ -13,16 +13,16 @@ class App extends Component {
     super(props)
     this.state = {
       dragItemPressed: false,
-      dragItemPositionY: 0,
-      coItemPositionY: 0,
-      cursorPositionY: 0,
+      dragItemY: 0,
+      linkedDragItemY: 0,
+      cursorY: 0,
       // new for inertia:
       timestamp: '',
-      ticker: 0,
+      intervalId: '',
       frame: 0, // how many pixels were dragged during the timeframe
       velocity: 0, // how fast the last frame was dragged through
-      momentumDistance: 0,  // how many pixels to travel based on velocity
-      momentumTargetY: 0    // the y pos that momentum will take the dragItem
+      momentumDistance: 0, // how many pixels to travel based on velocity
+      momentumTargetY: 0 // the y pos that momentum will take the dragItem
     }
   }
   handleDragStart = e => {
@@ -30,17 +30,18 @@ class App extends Component {
       // this is extremely important for iOS (but gives a warnign in chrome):
       e.preventDefault()
     }
-    const dragItemPositionY = this.getYPosition(this.refs.dragItem)
-    const coItemPositionY = this.getYPosition(this.refs.coItem)
+    clearInterval(this.state.intervalId)
+    const dragItemY = this.getYPosition(this.refs.dragItem)
+    const linkedDragItemY = this.getYPosition(this.refs.linkedDragItem)
     // start trackDragging every DRAG_TIMEFRAME ms:
-    const ticker = setInterval(this.trackDragging, DRAG_TIMEFRAME)
+    const intervalId = setInterval(this.trackDragging, DRAG_TIMEFRAME)
     this.setState({
       dragItemPressed: true,
-      dragItemPositionY,
-      coItemPositionY,
-      cursorPositionY: e.targetTouches ? e.targetTouches[0].pageY : e.pageY,
+      dragItemY,
+      linkedDragItemY,
+      cursorY: e.targetTouches ? e.targetTouches[0].pageY : e.pageY,
       timestamp: Date.now(),
-      ticker,
+      intervalId,
       frame: 0,
       velocity: 0,
       momentumDistance: 0
@@ -49,7 +50,7 @@ class App extends Component {
   handleDragEnd = e => {
     this.setState({ dragItemPressed: false })
 
-    clearInterval(this.state.ticker)
+    clearInterval(this.state.intervalId)
     if (this.state.velocity > 10 || this.state.velocity < -10) {
       const momentumDistance = MOMENTUM_FRICTION * this.state.velocity
       const momentumTargetY = Math.round(
@@ -70,22 +71,24 @@ class App extends Component {
   handleDragging = e => {
     if (!this.state.dragItemPressed) return
     const pageY = e.targetTouches ? e.targetTouches[0].pageY : e.pageY
-    const dragDistance = pageY - this.state.cursorPositionY
-    const dragItemGoToY = dragDistance + this.state.dragItemPositionY
+    const dragDistance = pageY - this.state.cursorY
+    const dragItemGoToY = dragDistance + this.state.dragItemY
     this.moveItems(dragItemGoToY)
   }
   moveItems = goToYUnbounded => {
-    const dragItemHeight = this.refs.dragItem.offsetHeight
+    const { dragItem, linkedDragItem } = this.refs
+    const { dragItemY, linkedDragItemY } = this.state
+    const dragItemHeight = dragItem.offsetHeight
     // make sure we're within our scrolling bounds:
     const goToY = goToYUnbounded <= -dragItemHeight
       ? -dragItemHeight
       : goToYUnbounded >= -LOWEST_Y ? -LOWEST_Y : goToYUnbounded
-    const dragDistance = goToY - this.state.dragItemPositionY
-    const coItemGoToY = dragDistance / 2 + this.state.coItemPositionY < 0
-      ? dragDistance / 2 + this.state.coItemPositionY
+    const dragDistance = goToY - dragItemY
+    const linkedDragItemGoToY = dragDistance / 2 + linkedDragItemY < 0
+      ? dragDistance / 2 + linkedDragItemY
       : 0
-    this.refs.coItem.style.transform = 'translateY(' + coItemGoToY + 'px)'
-    this.refs.dragItem.style.transform = 'translateY(' + goToY + 'px)'
+    linkedDragItem.style.transform = 'translateY(' + linkedDragItemGoToY + 'px)'
+    dragItem.style.transform = 'translateY(' + goToY + 'px)'
   }
   getYPosition = myRef => {
     const translateY = parseInt(
@@ -94,8 +97,9 @@ class App extends Component {
         .transform.split('matrix(1, 0, 0, 1, 0, ')
         .join('')
         .split(')')
-        .join('')
-    ,10)
+        .join(''),
+      10
+    )
     if (translateY) return translateY
     return 0
   }
@@ -106,6 +110,7 @@ class App extends Component {
     const elapsed = now - this.state.timestamp
     const frame = this.getYPosition(this.refs.dragItem)
     const delta = frame - this.state.frame
+    console.log(elapsed)
     const v = 1000 * delta / (1 + elapsed)
     const velocity = MOMENTUM_SPEED * v + 0.2 * this.state.velocity
     this.setState((state, props) => {
@@ -121,12 +126,16 @@ class App extends Component {
   calculateMomentum = () => {
     if (this.state.momentumDistance) {
       const elapsed = Date.now() - this.state.timestamp
-      const delta = -this.state.momentumDistance * Math.exp(-elapsed / TIME_CONSTANT)
+      const delta =
+        -this.state.momentumDistance * Math.exp(-elapsed / TIME_CONSTANT)
       if (delta > 0.5 || delta < -0.5) {
+        // this is where all the momentum is:
         this.moveItems(this.state.momentumTargetY + delta)
         window.requestAnimationFrame(this.calculateMomentum)
       } else {
+        // this is the last of the momentum:
         this.moveItems(this.state.momentumTargetY)
+        clearInterval(this.state.intervalId)
       }
     }
   }
@@ -134,7 +143,7 @@ class App extends Component {
   render () {
     return (
       <div className='container'>
-        <div className='google-map' ref='coItem'>
+        <div className='google-map' ref='linkedDragItem'>
           <iframe
             src='https://www.google.com/maps/embed?pb=!1m10!1m8!1m3!1d12704.575550670781!2d-121.80501235000003!3d37.24429345000001!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sen!2sus!4v1509685457561'
             title='Google Map'
